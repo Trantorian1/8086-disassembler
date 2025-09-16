@@ -29,44 +29,19 @@ enum OpCode {
 }
 
 #[repr(u8)]
-#[allow(unused)]
 enum Dest {
-    Rm = 0b0,
-    /// ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢿⠫⡁⢀⣀⣠⣒⣬⠿⡳⠛⠏⣿⢿⣛⢷⣄⡀⠀⠀⢀⡽⣻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-    /// ⣿⣿⣿⣻⣽⣿⣾⡿⣽⣾⣿⣽⣿⠟⣥⢞⡩⣴⡿⢗⣫⣭⣴⣷⣿⣶⣿⣿⣿⣿⣿⣏⠼⢆⣀⢦⣝⡿⣽⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-    /// ⣿⣿⣿⣿⣿⡿⣷⣿⣿⣯⣿⣿⠋⣨⡴⣫⣾⣿⣿⢿⣫⣷⣿⣿⣿⣿⣿⡿⡿⢟⡟⣻⣶⣾⣾⣓⣾⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣻
-    /// ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠏⣨⢋⣾⣿⡷⣻⣵⣿⣿⣿⣿⣿⣿⣿⣯⢷⣻⢯⣜⠦⠹⣿⣿⣿⡜⣿⣿⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-    /// ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡄⢣⣿⡟⢻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣽⢻⣯⣯⡜⠀⠁⠘⣿⣿⣯⣽⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-    /// ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠇⣰⡼⢫⣾⣿⡟⣽⣿⣿⣿⣿⣿⣿⣽⣞⣿⣻⣾⣱⢂⠀⠀⠀⢿⣿⣿⢻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-    /// ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢀⡋⠰⣱⣿⢏⣾⣿⣿⣿⣿⣿⣯⣿⢿⡾⣿⣵⢯⡗⠂⠀⠀⠀⠸⢿⣿⣾⣿⣿⣿⣿⡇⠀⠘⠀⠀⡏⠉⣉⣹⠉⢹⣿⠉⢹⣿⠋⢩⠉⢻⣿⣿⣿⣿
-    /// ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢠⠇⡱⣿⠏⣾⡿⢻⣿⣿⣿⣿⣿⣾⢫⢝⡺⡝⣺⢼⣷⣶⠞⣆⠠⣛⣿⣿⣿⣿⣿⣿⣇⣀⣰⣀⣠⣇⣀⣒⣿⣀⣈⣹⣀⣈⣹⣀⡸⣀⣼⣿⣿⣿⣿
-    /// ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣈⣷⡠⢹⣶⠓⢀⣼⣻⣿⣾⣿⣯⣟⣯⣶⣷⠈⣴⣯⢿⣶⢧⡄⠀⡛⡟⠁⠈⠐⠉⡙⢯⡟⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⣿⣿⣿⣿⣿
-    /// ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣭⣷⠀⣌⡟⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣆⠻⣿⣾⠟⠋⠁⠀⠝⡄⠀⠀⠀⡀⣠⠒⠛⠓⢛⠛⠛⡛⠛⡟⠛⣛⣻⠛⢛⠛⣿⠛⢛⣛⣿⣿⣿⣿
-    /// ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡎⣞⣧⠨⠀⠀⢙⣿⣿⣿⣾⣿⣿⣿⣿⣿⣿⡇⡀⠈⣯⢣⡰⠀⠀⢸⣿⣿⣿⣿⣷⣿⣿⠀⢸⣿⠀⠠⡄⠀⡇⠀⠭⣿⠀⢨⠀⣻⠀⠨⢽⣿⣿⣿⣿
-    /// ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣝⣿⣝⠨⠀⠰⣻⣿⣻⣿⢿⣿⣿⣿⣿⡿⠇⠁⢠⡛⠆⠁⠀⠀⢺⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-    /// ⣿⣿⣿⡛⡟⢿⠿⣿⣿⣿⣿⡬⣾⣗⡀⠀⢱⣿⣳⣯⣟⣯⢷⣿⣿⣿⣯⣵⣿⡂⢟⡀⠀⠀⠀⢸⣿⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⣿⣿⣿⣿⣿⣿
-    /// ⣿⣿⣷⣿⣌⣧⢋⡜⠹⢿⣿⣧⡌⢹⡈⠀⠀⣿⣟⡾⣽⣾⣿⣿⣿⣿⣿⣿⣟⢫⠖⡂⠀⠀⢰⣿⣯⣻⣽⣟⡮⢳⠹⣞⡷⣯⢷⡻⣾⡽⣞⡷⣯⣟⣞⣳⢻⣜⡳⣝⡲⣝⢮⡳⣛
-    /// ⣿⣿⣿⣿⣿⣿⣇⡄⠃⠄⠛⢿⣧⠸⡇⠀⢤⢻⣿⣿⢿⡿⣿⣻⣿⣿⣿⣿⣿⣿⡀⡠⢘⠧⣼⣿⣿⣿⣿⣟⡠⠃⠤⢘⢻⣟⡿⣧⣟⡿⣟⣿⢧⣼⣼⡸⠿⡼⢧⡻⣿⣻⣧⣿⣣
-    /// ⣿⣿⣿⣿⣿⣿⣿⣾⡥⠀⠀⠀⠙⠄⡇⢀⠀⢹⢺⠓⣜⣿⣿⣿⣿⣿⣿⠿⠛⢫⣽⡁⠁⣾⠟⡟⠿⣿⣿⣿⣷⣧⠀⠀⠐⡘⢻⠳⣟⣿⡻⠏⠛⠱⠊⠱⠁⠂⠀⠡⡙⠿⣽⣷⡻
-    /// ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣧⡀⠀⠀⠀⠌⠀⣻⢀⠇⣲⣿⣿⣿⣷⣿⢾⣽⣶⠅⠼⣿⣝⢠⡇⠫⠀⠁⠀⠙⢿⣿⣿⡀⢀⠰⣈⠄⠑⢌⠳⡝⠀⠀⠀⠀⠀⢃⠀⠀⢢⡱⢩⠾⣝⠣
-    /// ⣿⣿⣿⣿⣿⣿⣿⡿⠛⠝⠛⠈⠈⡦⢸⣄⠚⣧⠁⠻⡿⣿⣿⣿⣿⡿⣯⢟⣎⣻⡿⣇⢶⡧⠀⠡⠀⡀⠀⠠⠙⠢⠙⡄⢻⣜⣮⢤⣀⠫⠀⠀⠀⠀⠀⠀⠀⠀⣈⠳⠌⠡⠚⣍⠂
-    /// ⡿⠿⠛⠋⠉⠉⠀⠀⡀⣀⢀⢢⣼⡀⢸⣯⣿⣿⣦⠠⠕⢿⣿⣿⣿⣿⣽⡿⣞⢇⡿⣣⣿⠃⠀⠀⠀⢀⡁⠒⠀⠀⠘⡸⢷⣾⣿⣷⣮⣇⢧⣎⡥⠀⠀⣐⢢⣄⢠⡑⣌⡲⡝⠄⠀
-    Reg = 0b1,
+    Rm = 0b00,
 }
 
 #[repr(u8)]
-#[allow(unused)]
 enum Width {
     Byte = 0b0,
-    Word = 0b1,
 }
 
 #[repr(u8)]
-#[allow(unused)]
 enum Mode {
     Memory = 0b00000000,
     Displacement8bit = 0b01000000,
-    Displacement16bit = 0b10000000,
     Register = 0b11000000,
 }
 
@@ -118,11 +93,6 @@ fn main() -> Result<(), Error> {
         let byte_1 = data.map_err(Error::InvalidRead)?;
 
         if byte_1 & 0b11111100 == OpCode::Mov as u8 {
-            let byte_2 = bytes
-                .next()
-                .ok_or(Error::OpcodeMalformed("Missing second byte in MOV directive"))?
-                .map_err(Error::InvalidRead)?;
-
             //
             // ┌───────────────────────────────┐
             // │REGISTER/MEMORY MOV INSTRUCTION│
@@ -130,7 +100,7 @@ fn main() -> Result<(), Error> {
             //
             //  byte_1   byte_2   disp_lo  disp_hi
             //
-            // 10001011 11001001 00000000 00000000
+            // 10001011 11001001 xxxxxxxx xxxxxxxx
             // └┬───┘││ └┤└┬┘└┬┘ └┬─────┘ └┬─────┘
             //  │    ││  │ │  │   │        └───────► (DISP-HI): high displacement bits
             //  │    ││  │ │  │   └────────────────► (DISP-LO): low displacement bits
@@ -141,7 +111,13 @@ fn main() -> Result<(), Error> {
             //  │    └─────────────────────────────► (W......): width
             //  └──────────────────────────────────► (OP.....): opcode
             //
-            let dest = (byte_1 & 0b00000010) >> 1;
+
+            let byte_2 = bytes
+                .next()
+                .ok_or(Error::OpcodeMalformed("Missing second byte in MOV directive"))?
+                .map_err(Error::InvalidRead)?;
+
+            let dest = byte_1 & 0b00000010;
             let width = byte_1 & 0b00000001;
             let mode = byte_2 & 0b11000000;
             let reg = (byte_2 & 0b00111000) >> 3;
@@ -175,10 +151,10 @@ fn main() -> Result<(), Error> {
 
                 // Memory move
                 let err = if mode == Mode::Memory as u8 {
-                    if dest == Dest::Reg as u8 {
-                        writeln!(out, "mov {reg_str}, [{rm_str}]")
-                    } else {
+                    if dest == Dest::Rm as u8 {
                         writeln!(out, "mov [{rm_str}], {reg_str}")
+                    } else {
+                        writeln!(out, "mov {reg_str}, [{rm_str}]")
                     }
                 }
                 // Move with 8-bit displacement
@@ -190,17 +166,17 @@ fn main() -> Result<(), Error> {
                         ))?
                         .map_err(Error::InvalidRead)?;
 
-                    if dest == Dest::Reg as u8 {
-                        if disp_lo == 0 {
-                            writeln!(out, "mov {reg_str}, [{rm_str}]")
-                        } else {
-                            writeln!(out, "mov {reg_str}, [{rm_str} + {disp_lo}]")
-                        }
-                    } else {
+                    if dest == Dest::Rm as u8 {
                         if disp_lo == 0 {
                             writeln!(out, "mov [{rm_str}], {reg_str}")
                         } else {
                             writeln!(out, "mov [{rm_str} + {disp_lo}], {reg_str}")
+                        }
+                    } else {
+                        if disp_lo == 0 {
+                            writeln!(out, "mov {reg_str}, [{rm_str}]")
+                        } else {
+                            writeln!(out, "mov {reg_str}, [{rm_str} + {disp_lo}]")
                         }
                     }
                 }
@@ -220,16 +196,32 @@ fn main() -> Result<(), Error> {
                         .map_err(Error::InvalidRead)?;
                     let disp = ((disp_hi as u16) << 8) | (disp_lo as u16);
 
-                    if dest == Dest::Reg as u8 {
-                        writeln!(out, "mov {reg_str}, [{rm_str} + {disp}]")
-                    } else {
+                    if dest == Dest::Rm as u8 {
                         writeln!(out, "mov [{rm_str} + {disp}], {reg_str}")
+                    } else {
+                        writeln!(out, "mov {reg_str}, [{rm_str} + {disp}]")
                     }
                 };
 
                 err.map_err(Error::InvalidWrite)?;
             }
         } else if byte_1 & 0b11110000 == OpCode::MovImmediateReg as u8 {
+            //
+            // ┌─────────────────────────────────┐
+            // │IMMEDIATE TO REGISTER INSTRUCTION│
+            // └─────────────────────────────────┘
+            //
+            //  byte_1   data_1   data_2
+            //
+            // 10111011 xxxxxxxx xxxxxxxx
+            // └┬──┘│├┘ └┬─────┘ └┬─────┘
+            //  │   ││   │        └───────► (DATA): high immediate bits, if w=1
+            //  │   ││   └────────────────► (DATA): low immediate bits
+            //  │   │└────────────────────► (REG.): regsiter address
+            //  │   └─────────────────────► (W...): width
+            //  └─────────────────────────► (OP..): opcode
+            //
+
             let data_1 = bytes
                 .next()
                 .ok_or(Error::OpcodeMalformed(
@@ -237,10 +229,10 @@ fn main() -> Result<(), Error> {
                 ))?
                 .map_err(Error::InvalidRead)?;
 
-            let width = (byte_1 & 0b00001000) >> 3;
+            let width = byte_1 & 0b00001000;
             let reg = byte_1 & 0b00000111;
 
-            let err = if width == Width::Byte as u8 {
+            let err = if width == (Width::Byte as u8) << 3 {
                 let reg_str = REGISTERS_8_BIT[reg as usize];
                 writeln!(out, "mov {reg_str}, {data_1}")
             } else {
