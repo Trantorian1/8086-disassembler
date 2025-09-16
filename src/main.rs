@@ -7,7 +7,6 @@ enum Error {
     InvalidWrite(std::io::Error),
     OpcodeUnsupported(u8),
     OpcodeMalformed(&'static str),
-    OpcodeUnsupportedMode(u8),
 }
 
 impl std::fmt::Debug for Error {
@@ -17,16 +16,16 @@ impl std::fmt::Debug for Error {
             Self::InvalidFile(err) => write!(f, "Failed to open file: {err}"),
             Self::InvalidRead(err) => write!(f, "Failed to read file: {err}"),
             Self::InvalidWrite(err) => write!(f, "Failed to write to stdout: {err}"),
-            Self::OpcodeUnsupported(opcode) => write!(f, "Unsupported opcode: {opcode:b}"),
+            Self::OpcodeUnsupported(opcode) => write!(f, "Unsupported opcode in first byte: {opcode:b}"),
             Self::OpcodeMalformed(err) => write!(f, "Malformed opcode: {err}"),
-            Self::OpcodeUnsupportedMode(mode) => write!(f, "Unsupported opcode mode: {mode:b}"),
         }
     }
 }
 
 #[repr(u8)]
 enum OpCode {
-    MOVE = 0b10001000,
+    Mov = 0b10001000,
+    MovImmediateReg = 0b10110000,
 }
 
 #[repr(u8)]
@@ -72,35 +71,35 @@ enum Mode {
 }
 
 const REGISTERS_8_BIT: [&str; 8] = [
-    "AL", // 0b000
-    "CL", // 0b001
-    "DL", // 0b010
-    "BL", // 0b011
-    "AH", // 0b100
-    "CH", // 0b101
-    "DH", // 0b110
-    "BH", // 0b111
+    "al", // 0b000
+    "cl", // 0b001
+    "dl", // 0b010
+    "bl", // 0b011
+    "ah", // 0b100
+    "ch", // 0b101
+    "dh", // 0b110
+    "bh", // 0b111
 ];
 
 const REGISTERS_16_BIT: [&str; 8] = [
-    "AX", // 0b000
-    "CX", // 0b001
-    "DX", // 0b010
-    "BX", // 0b011
-    "SP", // 0b100
-    "BP", // 0b101
-    "SI", // 0b110
-    "DI", // 0b111
+    "ax", // 0b000
+    "cx", // 0b001
+    "dx", // 0b010
+    "bx", // 0b011
+    "sp", // 0b100
+    "bp", // 0b101
+    "si", // 0b110
+    "di", // 0b111
 ];
 
 const MEMORY_ADDR: [&str; 8] = [
-    "BX + SI", // 0b000
-    "BX + DI", // 0b001
-    "BP + SI", // 0b010
-    "BP + DI", // 0b011
-    "SI",      // 0b100
-    "DI",      // 0b101
-    "BP",      // 0b110
+    "bx + si", // 0b000
+    "bx + di", // 0b001
+    "bp + si", // 0b010
+    "bp + di", // 0b011
+    "si",      // 0b100
+    "di",      // 0b101
+    "bp",      // 0b110
     "BX",      // 0b111
 ];
 
@@ -110,16 +109,15 @@ fn main() -> Result<(), Error> {
     let read = std::io::BufReader::new(file);
     let mut bytes = read.bytes();
 
-    let mut out = std::io::BufWriter::new(std::io::stdout());
+    let mut out = std::io::stdout();
 
     // TODO: move this to something more efficient in the future. We probably don't want to be
     // reading one byte a time. Reading a page at a time seems like a better idea but then we would
     // have to handle edge cases where we need a byte after the section which we have just read.
     while let Some(data) = bytes.next() {
         let byte_1 = data.map_err(Error::InvalidRead)?;
-        let opcode = byte_1 & 0b11111100;
 
-        if opcode == OpCode::MOVE as u8 {
+        if byte_1 & 0b11111100 == OpCode::Mov as u8 {
             let byte_2 = bytes
                 .next()
                 .ok_or(Error::OpcodeMalformed("Missing second byte in MOV directive"))?
@@ -143,7 +141,7 @@ fn main() -> Result<(), Error> {
             //  │    └─────────────────────────────► (W......): width
             //  └──────────────────────────────────► (OP.....): opcode
             //
-            let dest = byte_1 & 0b00000010;
+            let dest = (byte_1 & 0b00000010) >> 1;
             let width = byte_1 & 0b00000001;
             let mode = byte_2 & 0b11000000;
             let reg = (byte_2 & 0b00111000) >> 3;
@@ -164,9 +162,9 @@ fn main() -> Result<(), Error> {
                 };
 
                 let err = if dest == Dest::Rm as u8 {
-                    write!(out, "MOV {rm_str}, {reg_str}\n")
+                    writeln!(out, "mov {rm_str}, {reg_str}")
                 } else {
-                    write!(out, "MOV {reg_str}, {rm_str}\n")
+                    writeln!(out, "mov {reg_str}, {rm_str}")
                 };
 
                 err.map_err(Error::InvalidWrite)?;
@@ -178,9 +176,9 @@ fn main() -> Result<(), Error> {
                 // Memory move
                 let err = if mode == Mode::Memory as u8 {
                     if dest == Dest::Reg as u8 {
-                        write!(out, "MOV {reg_str}, [{rm_str}]")
+                        writeln!(out, "mov {reg_str}, [{rm_str}]")
                     } else {
-                        write!(out, "MOV [{rm_str}], {reg_str}")
+                        writeln!(out, "mov [{rm_str}], {reg_str}")
                     }
                 }
                 // Move with 8-bit displacement
@@ -193,9 +191,17 @@ fn main() -> Result<(), Error> {
                         .map_err(Error::InvalidRead)?;
 
                     if dest == Dest::Reg as u8 {
-                        write!(out, "MOV {reg_str}, [{rm_str} + {disp_lo}]")
+                        if disp_lo == 0 {
+                            writeln!(out, "mov {reg_str}, [{rm_str}]")
+                        } else {
+                            writeln!(out, "mov {reg_str}, [{rm_str} + {disp_lo}]")
+                        }
                     } else {
-                        write!(out, "MOV [{rm_str} + {disp_lo}], {reg_str}")
+                        if disp_lo == 0 {
+                            writeln!(out, "mov [{rm_str}], {reg_str}")
+                        } else {
+                            writeln!(out, "mov [{rm_str} + {disp_lo}], {reg_str}")
+                        }
                     }
                 }
                 // Move with 16-bit displacement
@@ -212,19 +218,48 @@ fn main() -> Result<(), Error> {
                             "Missing disp_hi byte in MOV directive targettng memory",
                         ))?
                         .map_err(Error::InvalidRead)?;
-                    let disp = (disp_hi << 8) & disp_lo;
+                    let disp = ((disp_hi as u16) << 8) | (disp_lo as u16);
 
                     if dest == Dest::Reg as u8 {
-                        write!(out, "MOV {reg_str}, [{rm_str} + {disp}]")
+                        writeln!(out, "mov {reg_str}, [{rm_str} + {disp}]")
                     } else {
-                        write!(out, "MOV [{rm_str} + {disp}], {reg_str}")
+                        writeln!(out, "mov [{rm_str} + {disp}], {reg_str}")
                     }
                 };
 
                 err.map_err(Error::InvalidWrite)?;
             }
+        } else if byte_1 & 0b11110000 == OpCode::MovImmediateReg as u8 {
+            let data_1 = bytes
+                .next()
+                .ok_or(Error::OpcodeMalformed(
+                    "Missing first data byte in 8-bit immediate MOV directive",
+                ))?
+                .map_err(Error::InvalidRead)?;
+
+            let width = (byte_1 & 0b00001000) >> 3;
+            let reg = byte_1 & 0b00000111;
+
+            let err = if width == Width::Byte as u8 {
+                let reg_str = REGISTERS_8_BIT[reg as usize];
+                writeln!(out, "mov {reg_str}, {data_1}")
+            } else {
+                let reg_str = REGISTERS_16_BIT[reg as usize];
+
+                let data_2 = bytes
+                    .next()
+                    .ok_or(Error::OpcodeMalformed(
+                        "Missing second data byte in 16-bit immediate MOV directive",
+                    ))?
+                    .map_err(Error::InvalidRead)?;
+                let data = ((data_2 as u16) << 8) | (data_1 as u16);
+
+                writeln!(out, "mov {reg_str}, {data}")
+            };
+
+            err.map_err(Error::InvalidWrite)?;
         } else {
-            return Err(Error::OpcodeUnsupported(opcode));
+            return Err(Error::OpcodeUnsupported(byte_1));
         }
     }
 
