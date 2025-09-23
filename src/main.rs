@@ -22,10 +22,18 @@ impl std::fmt::Debug for Error {
     }
 }
 
-#[repr(u8)]
-enum OpCode {
-    Mov = 0b10001000,
-    MovImmediateReg = 0b10110000,
+mod opcode {
+    pub const MOV: u8 = 0b10001000;
+    pub const ADD: u8 = 0b00000000;
+    pub const SUB: u8 = 0b00101000;
+    pub const CMP: u8 = 0b00111000;
+
+    pub const ADD_SUB_CMP_IMM: u8 = 0b10000000;
+    pub const ADD_IMM: u8 = 0b00000000;
+    pub const SUB_IMM: u8 = 0b00101000;
+    pub const CMP_IMM: u8 = 0b00111000;
+
+    pub const MOV_IMM: u8 = 0b10110000;
 }
 
 #[repr(u8)]
@@ -92,166 +100,174 @@ fn main() -> Result<(), Error> {
     while let Some(data) = bytes.next() {
         let byte_1 = data.map_err(Error::InvalidRead)?;
 
-        if byte_1 & 0b11111100 == OpCode::Mov as u8 {
-            //
-            // ┌───────────────────────────────┐
-            // │REGISTER/MEMORY MOV INSTRUCTION│
-            // └───────────────────────────────┘
-            //
-            //  byte_1   byte_2   disp_lo  disp_hi
-            //
-            // 10001011 11001001 xxxxxxxx xxxxxxxx
-            // └┬───┘││ └┤└┬┘└┬┘ └┬─────┘ └┬─────┘
-            //  │    ││  │ │  │   │        └───────► (DISP-HI): high displacement bits
-            //  │    ││  │ │  │   └────────────────► (DISP-LO): low displacement bits
-            //  │    ││  │ │  └────────────────────► (RM.....): register/memory address
-            //  │    ││  │ └───────────────────────► (REG....): register address
-            //  │    ││  └─────────────────────────► (MOD....): modifier
-            //  │    │└────────────────────────────► (D......): direction
-            //  │    └─────────────────────────────► (W......): width
-            //  └──────────────────────────────────► (OP.....): opcode
-            //
+        match byte_1 & 0b11111100 {
+            opcode::MOV => {
+                //
+                // ┌───────────────────────────────┐
+                // │REGISTER/MEMORY MOV INSTRUCTION│
+                // └───────────────────────────────┘
+                //
+                //  byte_1   byte_2   disp_lo  disp_hi
+                //
+                // 10001011 11001001 xxxxxxxx xxxxxxxx
+                // └┬───┘││ └┤└┬┘└┬┘ └┬─────┘ └┬─────┘
+                //  │    ││  │ │  │   │        └───────► (DISP-HI): high displacement bits
+                //  │    ││  │ │  │   └────────────────► (DISP-LO): low displacement bits
+                //  │    ││  │ │  └────────────────────► (RM.....): register/memory address
+                //  │    ││  │ └───────────────────────► (REG....): register address
+                //  │    ││  └─────────────────────────► (MOD....): modifier
+                //  │    │└────────────────────────────► (D......): direction
+                //  │    └─────────────────────────────► (W......): width
+                //  └──────────────────────────────────► (OP.....): opcode
+                //
 
-            let byte_2 = bytes
-                .next()
-                .ok_or(Error::OpcodeMalformed("Missing second byte in MOV directive"))?
-                .map_err(Error::InvalidRead)?;
+                let byte_2 = bytes
+                    .next()
+                    .ok_or(Error::OpcodeMalformed("Missing second byte in MOV directive"))?
+                    .map_err(Error::InvalidRead)?;
 
-            let dest = byte_1 & 0b00000010;
-            let width = byte_1 & 0b00000001;
-            let mode = byte_2 & 0b11000000;
-            let reg = (byte_2 & 0b00111000) >> 3;
-            let rm = byte_2 & 0b00000111;
+                let dest = byte_1 & 0b00000010;
+                let width = byte_1 & 0b00000001;
+                let mode = byte_2 & 0b11000000;
+                let reg = (byte_2 & 0b00111000) >> 3;
+                let rm = byte_2 & 0b00000111;
 
-            let reg_str = if width == Width::Byte as u8 {
-                REGISTERS_8_BIT[reg as usize]
-            } else {
-                REGISTERS_16_BIT[reg as usize]
-            };
-
-            // Register to register move
-            if mode == Mode::Register as u8 {
-                let rm_str = if width == Width::Byte as u8 {
-                    REGISTERS_8_BIT[rm as usize]
+                let reg_str = if width == Width::Byte as u8 {
+                    REGISTERS_8_BIT[reg as usize]
                 } else {
-                    REGISTERS_16_BIT[rm as usize]
+                    REGISTERS_16_BIT[reg as usize]
                 };
 
-                let err = if dest == Dest::Rm as u8 {
-                    writeln!(out, "mov {rm_str}, {reg_str}")
-                } else {
-                    writeln!(out, "mov {reg_str}, {rm_str}")
-                };
-
-                err.map_err(Error::InvalidWrite)?;
-            }
-            // Memory to register / register to memory move
-            else {
-                let rm_str = MEMORY_ADDR[rm as usize];
-
-                // Memory move
-                let err = if mode == Mode::Memory as u8 {
-                    if dest == Dest::Rm as u8 {
-                        writeln!(out, "mov [{rm_str}], {reg_str}")
+                // Register to register move
+                if mode == Mode::Register as u8 {
+                    let rm_str = if width == Width::Byte as u8 {
+                        REGISTERS_8_BIT[rm as usize]
                     } else {
-                        writeln!(out, "mov {reg_str}, [{rm_str}]")
-                    }
-                }
-                // Move with 8-bit displacement
-                else if mode == Mode::Displacement8bit as u8 {
-                    let disp_lo = bytes
-                        .next()
-                        .ok_or(Error::OpcodeMalformed(
-                            "Missing disp_lo byte in MOV directive targettng memory",
-                        ))?
-                        .map_err(Error::InvalidRead)?;
+                        REGISTERS_16_BIT[rm as usize]
+                    };
 
-                    if dest == Dest::Rm as u8 {
-                        if disp_lo == 0 {
+                    let err = if dest == Dest::Rm as u8 {
+                        writeln!(out, "mov {rm_str}, {reg_str}")
+                    } else {
+                        writeln!(out, "mov {reg_str}, {rm_str}")
+                    };
+
+                    err.map_err(Error::InvalidWrite)?;
+                }
+                // Memory to register / register to memory move
+                else {
+                    let rm_str = MEMORY_ADDR[rm as usize];
+
+                    // Memory move
+                    let err = if mode == Mode::Memory as u8 {
+                        if dest == Dest::Rm as u8 {
                             writeln!(out, "mov [{rm_str}], {reg_str}")
                         } else {
-                            writeln!(out, "mov [{rm_str} + {disp_lo}], {reg_str}")
-                        }
-                    } else {
-                        if disp_lo == 0 {
                             writeln!(out, "mov {reg_str}, [{rm_str}]")
-                        } else {
-                            writeln!(out, "mov {reg_str}, [{rm_str} + {disp_lo}]")
                         }
                     }
-                }
-                // Move with 16-bit displacement
-                else {
-                    let disp_lo = bytes
-                        .next()
-                        .ok_or(Error::OpcodeMalformed(
-                            "Missing disp_lo byte in MOV directive targettng memory",
-                        ))?
-                        .map_err(Error::InvalidRead)?;
-                    let disp_hi = bytes
-                        .next()
-                        .ok_or(Error::OpcodeMalformed(
-                            "Missing disp_hi byte in MOV directive targettng memory",
-                        ))?
-                        .map_err(Error::InvalidRead)?;
-                    let disp = ((disp_hi as u16) << 8) | (disp_lo as u16);
+                    // Move with 8-bit displacement
+                    else if mode == Mode::Displacement8bit as u8 {
+                        let disp_lo = bytes
+                            .next()
+                            .ok_or(Error::OpcodeMalformed(
+                                "Missing disp_lo byte in MOV directive targettng memory",
+                            ))?
+                            .map_err(Error::InvalidRead)?;
 
-                    if dest == Dest::Rm as u8 {
-                        writeln!(out, "mov [{rm_str} + {disp}], {reg_str}")
-                    } else {
-                        writeln!(out, "mov {reg_str}, [{rm_str} + {disp}]")
+                        if dest == Dest::Rm as u8 {
+                            if disp_lo == 0 {
+                                writeln!(out, "mov [{rm_str}], {reg_str}")
+                            } else {
+                                writeln!(out, "mov [{rm_str} + {disp_lo}], {reg_str}")
+                            }
+                        } else {
+                            if disp_lo == 0 {
+                                writeln!(out, "mov {reg_str}, [{rm_str}]")
+                            } else {
+                                writeln!(out, "mov {reg_str}, [{rm_str} + {disp_lo}]")
+                            }
+                        }
                     }
-                };
+                    // Move with 16-bit displacement
+                    else {
+                        let disp_lo = bytes
+                            .next()
+                            .ok_or(Error::OpcodeMalformed(
+                                "Missing disp_lo byte in MOV directive targettng memory",
+                            ))?
+                            .map_err(Error::InvalidRead)?;
+                        let disp_hi = bytes
+                            .next()
+                            .ok_or(Error::OpcodeMalformed(
+                                "Missing disp_hi byte in MOV directive targettng memory",
+                            ))?
+                            .map_err(Error::InvalidRead)?;
+                        let disp = ((disp_hi as u16) << 8) | (disp_lo as u16);
 
-                err.map_err(Error::InvalidWrite)?;
+                        if dest == Dest::Rm as u8 {
+                            writeln!(out, "mov [{rm_str} + {disp}], {reg_str}")
+                        } else {
+                            writeln!(out, "mov {reg_str}, [{rm_str} + {disp}]")
+                        }
+                    };
+
+                    err.map_err(Error::InvalidWrite)?;
+                }
             }
-        } else if byte_1 & 0b11110000 == OpCode::MovImmediateReg as u8 {
-            //
-            // ┌─────────────────────────────────┐
-            // │IMMEDIATE TO REGISTER INSTRUCTION│
-            // └─────────────────────────────────┘
-            //
-            //  byte_1   data_1   data_2
-            //
-            // 10111011 xxxxxxxx xxxxxxxx
-            // └┬──┘│├┘ └┬─────┘ └┬─────┘
-            //  │   ││   │        └───────► (DATA): high immediate bits, if w=1
-            //  │   ││   └────────────────► (DATA): low immediate bits
-            //  │   │└────────────────────► (REG.): regsiter address
-            //  │   └─────────────────────► (W...): width
-            //  └─────────────────────────► (OP..): opcode
-            //
+            opcode::ADD => todo!(),
+            opcode::SUB => todo!(),
+            opcode::CMP => todo!(),
+            opcode::ADD_SUB_CMP_IMM => todo!(),
+            _ => match byte_1 & 0b11110000 {
+                opcode::MOV_IMM => {
+                    //
+                    // ┌─────────────────────────────────┐
+                    // │IMMEDIATE TO REGISTER INSTRUCTION│
+                    // └─────────────────────────────────┘
+                    //
+                    //  byte_1   data_1   data_2
+                    //
+                    // 10111011 xxxxxxxx xxxxxxxx
+                    // └┬──┘│├┘ └┬─────┘ └┬─────┘
+                    //  │   ││   │        └───────► (DATA): high immediate bits, if w=1
+                    //  │   ││   └────────────────► (DATA): low immediate bits
+                    //  │   │└────────────────────► (REG.): regsiter address
+                    //  │   └─────────────────────► (W...): width
+                    //  └─────────────────────────► (OP..): opcode
+                    //
 
-            let data_1 = bytes
-                .next()
-                .ok_or(Error::OpcodeMalformed(
-                    "Missing first data byte in 8-bit immediate MOV directive",
-                ))?
-                .map_err(Error::InvalidRead)?;
+                    let data_1 = bytes
+                        .next()
+                        .ok_or(Error::OpcodeMalformed(
+                            "Missing first data byte in 8-bit immediate MOV directive",
+                        ))?
+                        .map_err(Error::InvalidRead)?;
 
-            let width = byte_1 & 0b00001000;
-            let reg = byte_1 & 0b00000111;
+                    let width = byte_1 & 0b00001000;
+                    let reg = byte_1 & 0b00000111;
 
-            let err = if width == (Width::Byte as u8) << 3 {
-                let reg_str = REGISTERS_8_BIT[reg as usize];
-                writeln!(out, "mov {reg_str}, {data_1}")
-            } else {
-                let reg_str = REGISTERS_16_BIT[reg as usize];
+                    let err = if width == (Width::Byte as u8) << 3 {
+                        let reg_str = REGISTERS_8_BIT[reg as usize];
+                        writeln!(out, "mov {reg_str}, {data_1}")
+                    } else {
+                        let reg_str = REGISTERS_16_BIT[reg as usize];
 
-                let data_2 = bytes
-                    .next()
-                    .ok_or(Error::OpcodeMalformed(
-                        "Missing second data byte in 16-bit immediate MOV directive",
-                    ))?
-                    .map_err(Error::InvalidRead)?;
-                let data = ((data_2 as u16) << 8) | (data_1 as u16);
+                        let data_2 = bytes
+                            .next()
+                            .ok_or(Error::OpcodeMalformed(
+                                "Missing second data byte in 16-bit immediate MOV directive",
+                            ))?
+                            .map_err(Error::InvalidRead)?;
+                        let data = ((data_2 as u16) << 8) | (data_1 as u16);
 
-                writeln!(out, "mov {reg_str}, {data}")
-            };
+                        writeln!(out, "mov {reg_str}, {data}")
+                    };
 
-            err.map_err(Error::InvalidWrite)?;
-        } else {
-            return Err(Error::OpcodeUnsupported(byte_1));
+                    err.map_err(Error::InvalidWrite)?;
+                }
+                byte => return Err(Error::OpcodeUnsupported(byte)),
+            },
         }
     }
 
