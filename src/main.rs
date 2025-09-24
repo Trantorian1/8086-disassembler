@@ -36,6 +36,12 @@ mod opcode {
     pub const MOV_IMM: u8 = 0b10110000;
 }
 
+mod mode {
+    pub const MEMORY: u8 = 0b00000000;
+    pub const DISPLACEMENT_8BIT: u8 = 0b01000000;
+    pub const REGISTER: u8 = 0b11000000;
+}
+
 #[repr(u8)]
 enum Dest {
     Rm = 0b00,
@@ -52,6 +58,17 @@ enum Mode {
     Displacement8bit = 0b01000000,
     Register = 0b11000000,
 }
+
+const OPCODE_ARITHMETIC: [&str; 8] = [
+    "add", // 0b000
+    "adc", // 0b001
+    "NIL", // 0b010
+    "sbb", // 0b011
+    "NIL", // 0b100
+    "sub", // 0b101
+    "NIL", // 0b110
+    "cmp", // 0b111
+];
 
 const REGISTERS_8_BIT: [&str; 8] = [
     "al", // 0b000
@@ -83,7 +100,7 @@ const MEMORY_ADDR: [&str; 8] = [
     "si",      // 0b100
     "di",      // 0b101
     "bp",      // 0b110
-    "BX",      // 0b111
+    "bx",      // 0b111
 ];
 
 fn main() -> Result<(), Error> {
@@ -121,7 +138,7 @@ fn main() -> Result<(), Error> {
                 //  └──────────────────────────────────► (OP.....): opcode
                 //
 
-                opcode_pattern_mov("mov", byte_1, &mut bytes, &mut out)?;
+                opcode_pattern_reg_mem("mov", byte_1, &mut bytes, &mut out)?;
             }
             opcode::ADD => {
                 //
@@ -143,17 +160,121 @@ fn main() -> Result<(), Error> {
                 //  └──────────────────────────────────► (OP.....): opcode
                 //
 
-                opcode_pattern_mov("add", byte_1, &mut bytes, &mut out)?;
+                opcode_pattern_reg_mem("add", byte_1, &mut bytes, &mut out)?;
             }
             opcode::SUB => todo!(),
             opcode::CMP => todo!(),
-            opcode::ADD_SUB_CMP_IMM => todo!(),
+            opcode::ADD_SUB_CMP_IMM => {
+                let byte_2 = bytes
+                    .next()
+                    .ok_or_else(|| Error::OpcodeMalformed("Missing second byte in add/sub/cmp directive".to_string()))?
+                    .map_err(Error::InvalidRead)?;
+                let disp_lo = bytes
+                    .next()
+                    .ok_or_else(|| Error::OpcodeMalformed("Missing second byte in add/sub/cmp directive".to_string()))?
+                    .map_err(Error::InvalidRead)?;
+                let disp_hi = bytes
+                    .next()
+                    .ok_or_else(|| Error::OpcodeMalformed("Missing second byte in add/sub/cmp directive".to_string()))?
+                    .map_err(Error::InvalidRead)?;
+                let data_1 = bytes
+                    .next()
+                    .ok_or_else(|| Error::OpcodeMalformed("Missing second byte in add/sub/cmp directive".to_string()))?
+                    .map_err(Error::InvalidRead)?;
+
+                let sign = byte_1 & 0b00000010;
+                let width = byte_1 & 0b00000001;
+
+                let mode = byte_2 & 0b11000000;
+                let opcode = byte_2 & 0b00111000;
+                let rm = byte_2 & 0b00000111;
+
+                // Extract opcode from identifier
+                let opcode = OPCODE_ARITHMETIC[opcode as usize];
+
+                // Retrieve immediate high bits
+                let data_2 = (width == 0).then_some(Ok(0)).unwrap_or_else(|| {
+                    bytes
+                        .next()
+                        .ok_or_else(|| {
+                            Error::OpcodeMalformed("Missing second byte in add/sub/cmp directive".to_string())
+                        })?
+                        .map_err(Error::InvalidRead)
+                })?;
+
+                // Immediate to register
+                if mode == mode::REGISTER {
+                    let rm_str = if width == 0 {
+                        REGISTERS_8_BIT[rm as usize]
+                    } else {
+                        REGISTERS_16_BIT[rm as usize]
+                    };
+
+                    // Unsigned add
+                    let err = if sign == 0 {
+                        writeln!(out, "{opcode} {rm_str}, {data}")
+                    }
+                    // Signed add
+                    else {
+                        let data_signed = i16::from_ne_bytes([data_2, data_1]);
+                        writeln!(out, "{opcode} {rm_str}, {data_signed}")
+                    };
+
+                    err.map_err(Error::InvalidWrite)?;
+                }
+                // Immediate to memory
+                else {
+                    let rm_str = MEMORY_ADDR[rm as usize];
+                    let width_str = if width == 0 { "byte" } else { "word" };
+
+                    // Memory add
+                    let err = if mode == mode::MEMORY {
+                        // Unsigned add
+                        if sign == 0 {
+                            writeln!(out, "{opcode} {width_str} [{rm_str}], {data}")
+                        }
+                        // Signed add
+                        else {
+                            let data_signed = data as i16;
+                            writeln!(out, "{opcode} {width_str} [{rm_str}], {data_signed}")
+                        }
+                    }
+                    // Add with 8-bit displacement
+                    else if mode == mode::DISPLACEMENT_8BIT {
+                        // Unsigned add
+                        if sign == 0 {
+                            writeln!(out, "{opcode} {width_str} [{rm_str} + {disp_lo}], {data}")
+                        }
+                        // Signed add
+                        else {
+                            let data_signed = data as i16;
+                            writeln!(out, "{opcode} {width_str} [{rm_str} + {disp_lo}], {data_signed}")
+                        }
+                    }
+                    // Add with 16-bit displacement
+                    else {
+                        let disp = ((disp_hi as u16) << 8) | (disp_lo as u16);
+
+                        // Unsigned add
+                        if sign == 0 {
+                            writeln!(out, "{opcode} {width_str} [{rm_str} + {disp}], {data}")
+                        }
+                        // Signed add
+                        else {
+                            let data_signed = data as i16;
+                            writeln!(out, "{opcode} {width_str} [{rm_str} + {disp}], {data_signed}")
+                        }
+                    };
+
+                    err.map_err(Error::InvalidWrite)?;
+                }
+            }
             _ => match byte_1 & 0b11110000 {
                 opcode::MOV_IMM => {
                     //
-                    // ┌─────────────────────────────────┐
-                    // │IMMEDIATE TO REGISTER INSTRUCTION│
-                    // └─────────────────────────────────┘
+                    // ┌─────────────────────────────────────┐
+                    // │IMMEDIATE TO REGISTER MOV INSTRUCTION│
+                    // └─────────────────────────────────────┘
                     //
                     //  byte_1   data_1   data_2
                     //
@@ -205,7 +326,8 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-fn opcode_pattern_mov(
+/// Register/memory to register
+fn opcode_pattern_reg_mem(
     opcode: &'static str,
     byte_1: u8,
     bytes: &mut std::io::Bytes<impl std::io::Read>,
