@@ -18,40 +18,45 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-const BUFFER_SIZE: usize = 512;
+pub(crate) const BUFFER_SIZE: usize = 512;
 
 pub(crate) trait ByteReaderT {
     fn byte_read(&mut self) -> Result<Option<u8>, Error>;
     fn byte_read_next(&mut self) -> Result<Option<u8>, Error>;
 }
 
-pub(crate) struct ByteReader<R: std::io::Read, const SIZE: usize = BUFFER_SIZE> {
-    bytes: [u8; SIZE],
+pub(crate) struct ByteReader<R: std::io::Read> {
+    bytes: [u8; BUFFER_SIZE],
     index: usize,
+    available: usize,
     reader: R,
 }
 
-impl<R: std::io::Read, const SIZE: usize> ByteReader<R, SIZE> {
+impl<R: std::io::Read> ByteReader<R> {
     pub(crate) fn new(mut reader: R) -> Result<Self, Error> {
-        let mut bytes = [0; SIZE];
-        if reader.read(&mut bytes).map_err(Error::Io)? == 0 {
+        let mut bytes = [0; BUFFER_SIZE];
+        let available = reader.read(&mut bytes).map_err(Error::Io)?;
+
+        if available == 0 {
             Err(Error::Empty)
         } else {
             Ok(Self {
                 bytes,
                 index: 0,
+                available,
                 reader,
             })
         }
     }
 }
 
-impl<R: std::io::Read, const SIZE: usize> ByteReaderT for ByteReader<R, SIZE> {
+impl<R: std::io::Read> ByteReaderT for ByteReader<R> {
     fn byte_read(&mut self) -> Result<Option<u8>, Error> {
-        if self.index < SIZE {
+        if self.index < self.available {
             Ok(Some(self.bytes[self.index]))
         } else {
-            if self.reader.read(&mut self.bytes).map_err(Error::Io)? == 0 {
+            self.available = self.reader.read(&mut self.bytes).map_err(Error::Io)?;
+            if self.available == 0 {
                 Ok(None)
             } else {
                 self.index = 0;
@@ -61,12 +66,13 @@ impl<R: std::io::Read, const SIZE: usize> ByteReaderT for ByteReader<R, SIZE> {
     }
 
     fn byte_read_next(&mut self) -> Result<Option<u8>, Error> {
-        if self.index < SIZE {
+        if self.index < self.available {
             let byte = Ok(Some(self.bytes[self.index]));
             self.index += 1;
             byte
         } else {
-            if self.reader.read(&mut self.bytes).map_err(Error::Io)? == 0 {
+            self.available = self.reader.read(&mut self.bytes).map_err(Error::Io)?;
+            if self.available == 0 {
                 self.index = 0;
                 Ok(None)
             } else {
@@ -83,7 +89,7 @@ impl<R: std::io::Read, const SIZE: usize> ByteReaderT for ByteReader<R, SIZE> {
 mod test {
     use crate::reader::ByteReaderT;
 
-    pub(crate) struct ByteReaderForTesting {
+    pub struct ByteReaderForTesting {
         data: Vec<u8>,
         index: usize,
     }

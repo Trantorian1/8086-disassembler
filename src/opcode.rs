@@ -1,5 +1,5 @@
 #[derive(Clone, Debug)]
-struct OpCode<const BYTES: usize> {
+pub(crate) struct OpCode<const BYTES: usize> {
     code: BitData,
     bits: [BitData; BYTES],
 }
@@ -25,7 +25,10 @@ impl<const BYTES: usize> OpCode<BYTES> {
         Self { code, bits }
     }
 
-    fn extract(&self, byte_reader: &mut impl crate::reader::ByteReaderT) -> Result<[u8; BYTES], crate::reader::Error> {
+    pub(crate) fn extract(
+        &self,
+        byte_reader: &mut impl crate::reader::ByteReaderT,
+    ) -> Result<[u8; BYTES], crate::reader::Error> {
         let mut bits = [0; BYTES];
         let mut byte = byte_reader.byte_read_next()?.ok_or(crate::reader::Error::Empty)?;
         let mut offset = 8 - self.code.bits;
